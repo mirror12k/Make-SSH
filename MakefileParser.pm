@@ -12,6 +12,9 @@ sub new {
 	my ($class, %args) = @_;
 	my $self = bless {}, $class;
 
+	$self->{vars} = {};
+	$self->{rules} = {};
+
 	return $self
 }
 
@@ -38,8 +41,49 @@ sub parse {
 		push @joined_lines, $line;
 	}
 
-	foreach my $line (@joined_lines) {
-		say $line
+	$self->{lines} = \@joined_lines;
+	$self->process;
+}
+
+sub get_line {
+	my ($self) = @_;
+	return unless @{$self->{lines}};
+	return shift @{$self->{lines}}
+}
+
+sub get_block {
+	my ($self) = @_;
+	my @block;
+	while (@{$self->{lines}} and $self->{lines}[0] =~ /\A\t/) {
+		push @block, shift (@{$self->{lines}}) =~ s/\A\t//r;
+	}
+	return \@block
+}
+
+our $identifier_expression_regex = qr/[a-zA-Z_][a-zA-Z_0-9]*/;
+our $substitute_expression_regex = qr/\$\($identifier_expression_regex\)/;
+our $variable_identifier_expression_regex = qr/(?:[a-zA-Z_]|$substitute_expression_regex)(?:[a-zA-Z_0-9]|$substitute_expression_regex)*/;
+
+sub substitute_expression {
+	my ($self, $expression) = @_;
+	return $expression =~ s/\$\(([a-zA-Z_][a-zA-Z_0-9]*)\)/$self->{vars}{$1}/ger
+}
+
+sub process {
+	my ($self) = @_;
+	while (my $line = $self->get_line) {
+		if ($line =~ /\A($variable_identifier_expression_regex)\s*=\s*(.*)\Z/) {
+			my ($var, $expression) = ($1, $2);
+			$var = $self->substitute_expression($var);
+			$expression = $self->substitute_expression($expression);
+			say "got var '$var' = $expression";
+			$self->{vars}{$var} = $expression;
+		} elsif ($line =~ /\A($variable_identifier_expression_regex):\Z/) {
+			my $var = $1;
+			$var = $self->substitute_expression($var);
+			say "got block: '$var'";
+			$self->{rules}{$var} = $self->get_block;
+		}
 	}
 }
 
@@ -47,3 +91,5 @@ sub parse {
 
 my $parser = MakefileParser->new;
 $parser->parse_file('test.make');
+say Dumper $parser->{vars};
+say Dumper $parser->{rules};
