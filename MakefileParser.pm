@@ -183,12 +183,8 @@ sub run_sftp_block {
 	foreach my $command (@$block) {
 		$command = $self->substitute_expression($command);
 		say "$sftp_args{user}\@$sftp_args{host}> $command";
-		if ($command =~ /\Aget\s+((?:[^\s]|\\\s)*)\s+=>\s+((?:[^\s]|\\\s)*)\Z/) {
-			my ($src, $dst) = ($1, $2);
-			$src =~ s/\\(.)/$1/gs;
-			$dst =~ s/\\(.)/$1/gs;
-			$con->get($src, $dst);
-		} elsif ($command =~ /\Arget\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+
+		if ($command =~ /\Aget\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
 			my ($src, $dst) = ($1, $2);
 			$src =~ s/\\(.)/$1/gs;
 			$dst =~ s/\\(.)/$1/gs;
@@ -197,17 +193,8 @@ sub run_sftp_block {
 			my ($src, $dst) = ($1, $2);
 			$src =~ s/\\(.)/$1/gs;
 			$dst =~ s/\\(.)/$1/gs;
-			$con->put($src, $dst);
-		} elsif ($command =~ /\Arput\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
-			my ($src, $dst) = ($1, $2);
-			$src =~ s/\\(.)/$1/gs;
-			$dst =~ s/\\(.)/$1/gs;
 			$con->rput($src, $dst);
-		} elsif ($command =~ /\Aremove\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
-			my $dir = $1;
-			$dir =~ s/\\(.)/$1/gs;
-			$con->remove($dir);
-		} elsif ($command =~ /\Arremove\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+		} elsif ($command =~ /\Adelete\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
 			my $dir = $1;
 			$dir =~ s/\\(.)/$1/gs;
 			$con->rremove($dir);
