@@ -5,6 +5,7 @@ use warnings;
 use feature 'say';
 
 use Carp;
+use Net::SFTP::Foreign;
 
 use Data::Dumper;
 
@@ -126,24 +127,92 @@ sub run {
 			my $arg = $self->substitute_expression($1 // '');
 			die "died: $arg\n";
 		} elsif ($line =~ /\Ash(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
 			my $commands = $self->get_block_from_lines(\@block);
-			foreach my $command (@$commands) {
-				say "$command";
-				my $ignore_error = $command =~ /\A-/;
-				$command =~ s/\A-//;
-				if ($command =~ /\Acd\s+(.*)\Z/) {
-					unless (chdir $1) {
-						die "failed to cd into '$1'";
-					}
-				} else {
-					print `$command`;
-					if (not $ignore_error and $? != 0) {
-						die "command failed with status code " . ($? >> 8);
-					}
-				}
-			}
+			$self->run_sh_block($arg, $commands);
+		} elsif ($line =~ /\Asftp(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			my $commands = $self->get_block_from_lines(\@block);
+			$self->run_sftp_block($arg, $commands);
 		} else {
 			confess "unknown makefile rule command: '$line'";
+		}
+	}
+}
+
+sub run_sh_block {
+	my ($self, $args, $block) = @_;
+
+	foreach my $command (@$block) {
+		my $ignore_error = $command =~ /\A-/;
+		$command =~ s/\A-//;
+		$command = $self->substitute_expression($command);
+		say "$command";
+		if ($command =~ /\Acd\s+(.*)\Z/) {
+			unless (chdir $1) {
+				die "failed to cd into '$1'\n";
+			}
+		} else {
+			print `$command`;
+			if (not $ignore_error and $? != 0) {
+				die "command failed with status code " . ($? >> 8) . "\n";
+			}
+		}
+	}
+}
+
+sub run_sftp_block {
+	my ($self, $args, $block) = @_;
+
+	my %sftp_args = (
+		autodie => 1,
+	);
+	if ($args =~ /\A(.+):(.+)\@([^\@]+)\Z/s) {
+		$sftp_args{user} = $1;
+		$sftp_args{password} = $2;
+		$sftp_args{host} = $3;
+	} elsif ($args =~ /\A(.+)\@([^\@]+)\Z/s) {
+		$sftp_args{user} = $1;
+		$sftp_args{host} = $2;
+	} else {
+		confess "invalid sftp argument: '$args'";
+	}
+
+	say "sftp login to $sftp_args{user}\@$sftp_args{host} ...";
+	my $con = Net::SFTP::Foreign->new(%sftp_args);
+	foreach my $command (@$block) {
+		$command = $self->substitute_expression($command);
+		say "$sftp_args{user}\@$sftp_args{host}> $command";
+		if ($command =~ /\Aget\s+((?:[^\s]|\\\s)*)\s+=>\s+((?:[^\s]|\\\s)*)\Z/) {
+			my ($src, $dst) = ($1, $2);
+			$src =~ s/\\(.)/$1/gs;
+			$dst =~ s/\\(.)/$1/gs;
+			$con->get($src, $dst);
+		} elsif ($command =~ /\Arget\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+			my ($src, $dst) = ($1, $2);
+			$src =~ s/\\(.)/$1/gs;
+			$dst =~ s/\\(.)/$1/gs;
+			$con->rget($src, $dst);
+		} elsif ($command =~ /\Aput\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+			my ($src, $dst) = ($1, $2);
+			$src =~ s/\\(.)/$1/gs;
+			$dst =~ s/\\(.)/$1/gs;
+			$con->put($src, $dst);
+		} elsif ($command =~ /\Arput\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+			my ($src, $dst) = ($1, $2);
+			$src =~ s/\\(.)/$1/gs;
+			$dst =~ s/\\(.)/$1/gs;
+			$con->rput($src, $dst);
+		} elsif ($command =~ /\Aremove\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+			my $dir = $1;
+			$dir =~ s/\\(.)/$1/gs;
+			$con->remove($dir);
+		} elsif ($command =~ /\Arremove\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
+			my $dir = $1;
+			$dir =~ s/\\(.)/$1/gs;
+			$con->rremove($dir);
+		} else {
+			confess "invalid sftp command: '$command'";
 		}
 	}
 }
