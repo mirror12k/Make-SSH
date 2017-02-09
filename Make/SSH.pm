@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-package MakefileParser;
+package Make::SSH;
 use strict;
 use warnings;
 
@@ -9,7 +9,7 @@ use Carp;
 use Net::SFTP::Foreign;
 use Net::OpenSSH;
 
-use Data::Dumper;
+# use Data::Dumper;
 
 
 
@@ -197,10 +197,6 @@ sub run_ssh_block {
 		$ssh_args{password} = $2 if defined $2;
 		$ssh_args{host} = $3;
 		$ssh_args{port} = $4 if defined $4;
-	# } elsif ($args =~ /\A(.+)\@([^\@:]+(?::(\d+))?)\Z/s) {
-	# 	$ssh_args{user} = $1;
-	# 	$ssh_args{host} = $2;
-	# 	$ssh_args{port} = $3 if defined $3;
 	} else {
 		confess "invalid ssh argument: '$args'";
 	}
@@ -235,10 +231,6 @@ sub run_sftp_block {
 		$sftp_args{password} = $2 if defined $2;
 		$sftp_args{host} = $3;
 		$sftp_args{port} = $4 if defined $4;
-	# } elsif ($args =~ /\A(.+)\@([^\@:]+(?::(\d+))?)\Z/s) {
-	# 	$sftp_args{user} = $1;
-	# 	$sftp_args{host} = $2;
-	# 	$sftp_args{port} = $3 if defined $3;
 	} else {
 		confess "invalid sftp argument: '$args'";
 	}
@@ -281,10 +273,8 @@ sub main {
 	my ($rule) = @_;
 	$rule = $rule // 'all';
 
-	my $parser = MakefileParser->new;
+	my $parser = Make::SSH->new;
 	$parser->parse_file('project.make');
-	# say Dumper $parser->{vars};
-	# say Dumper $parser->{rules};
 
 	$parser->run_rule($rule);
 }

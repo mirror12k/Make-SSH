@@ -1,4 +1,4 @@
-# a basic make-style script to build a C program
+# a basic example makefile to build a C program
 
 
 # variables are supported
