@@ -4,7 +4,11 @@ use warnings;
 
 use feature 'say';
 
+use Carp;
+
 use Data::Dumper;
+
+
 
 
 
@@ -83,6 +87,37 @@ sub process {
 			$var = $self->substitute_expression($var);
 			say "got block: '$var'";
 			$self->{rules}{$var} = $self->get_block;
+		} else {
+			confess "unknown makefile directive: '$line'";
+		}
+	}
+}
+
+sub run_rule {
+	my ($self, $rule) = @_;
+	if (exists $self->{rules}{$rule}) {
+		$self->run($self->{rules}{$rule});
+	} else {
+		croak "no such rule $rule!";
+	}
+}
+
+sub run {
+	my ($self, $block_ref) = @_;
+	my @block = @$block_ref;
+	while (@block) {
+		my $line = shift @block;
+		if ($line =~ /\Asay(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			say $arg;
+		} elsif ($line =~ /\Awarn(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			warn "warning: $arg\n";
+		} elsif ($line =~ /\Adie(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			die "died: $arg\n";
+		} else {
+			confess "unknown makefile rule command: '$line'";
 		}
 	}
 }
@@ -93,3 +128,6 @@ my $parser = MakefileParser->new;
 $parser->parse_file('test.make');
 say Dumper $parser->{vars};
 say Dumper $parser->{rules};
+
+my $rule = shift // die "no rule specified";
+$parser->run_rule($rule);
