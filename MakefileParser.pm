@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 package MakefileParser;
 use strict;
 use warnings;
