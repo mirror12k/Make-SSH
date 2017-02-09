@@ -126,6 +126,10 @@ sub run {
 		} elsif ($line =~ /\Adie(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			die "died: $arg\n";
+		} elsif ($line =~ /\Aperl(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			my $commands = $self->get_block_from_lines(\@block);
+			$self->run_perl_block($arg, $commands);
 		} elsif ($line =~ /\Ash(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			my $commands = $self->get_block_from_lines(\@block);
@@ -158,6 +162,15 @@ sub run_sh_block {
 				die "command failed with status code " . ($? >> 8) . "\n";
 			}
 		}
+	}
+}
+
+sub run_perl_block {
+	my ($self, $args, $block) = @_;
+	local $@;
+	eval join "\n", map $self->substitute_expression($_), @$block;
+	if ($@) {
+		confess "perl blocked died with error: '$@'";
 	}
 }
 
@@ -208,8 +221,8 @@ sub run_sftp_block {
 
 my $parser = MakefileParser->new;
 $parser->parse_file('test.make');
-say Dumper $parser->{vars};
-say Dumper $parser->{rules};
+# say Dumper $parser->{vars};
+# say Dumper $parser->{rules};
 
 my $rule = shift // die "no rule specified";
 $parser->run_rule($rule);
