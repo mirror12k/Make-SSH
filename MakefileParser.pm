@@ -92,11 +92,12 @@ sub process {
 			$expression = $self->substitute_expression($expression);
 			# say "got var '$var' = $expression";
 			$self->{vars}{$var} = $expression;
-		} elsif ($line =~ /\A($variable_identifier_expression_regex):\Z/) {
-			my $var = $1;
-			$var = $self->substitute_expression($var);
-			# say "got block: '$var'";
-			$self->{rules}{$var} = $self->get_block;
+		} elsif ($line =~ /\A($variable_identifier_expression_regex):(?:\s*(.+))?\Z/) {
+			my $rule_name = $1;
+			my $subrules = $2 // '';
+			$rule_name = $self->substitute_expression($rule_name);
+			# say "got block: '$rule_name'";
+			$self->{rules}{$rule_name} = [ "rule $subrules", @{$self->get_block} ];
 		} else {
 			confess "unknown makefile directive: '$line'";
 		}
@@ -106,13 +107,14 @@ sub process {
 sub run_rule {
 	my ($self, $rule) = @_;
 	if (exists $self->{rules}{$rule}) {
-		$self->run($self->{rules}{$rule});
+		say "make $rule";
+		$self->run_rule_block($self->{rules}{$rule});
 	} else {
 		croak "no such rule $rule!";
 	}
 }
 
-sub run {
+sub run_rule_block {
 	my ($self, $block_ref) = @_;
 	my @block = @$block_ref;
 	while (@block) {
@@ -126,6 +128,11 @@ sub run {
 		} elsif ($line =~ /\Adie(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			die "died: $arg\n";
+		} elsif ($line =~ /\Arule(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			foreach my $rule (split /\s+/, $arg) {
+				$self->run_rule($rule);
+			}
 		} elsif ($line =~ /\Aperl(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			my $commands = $self->get_block_from_lines(\@block);
@@ -224,5 +231,5 @@ $parser->parse_file('test.make');
 # say Dumper $parser->{vars};
 # say Dumper $parser->{rules};
 
-my $rule = shift // die "no rule specified";
+my $rule = shift // 'all';
 $parser->run_rule($rule);
