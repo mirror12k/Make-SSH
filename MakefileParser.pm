@@ -6,6 +6,7 @@ use feature 'say';
 
 use Carp;
 use Net::SFTP::Foreign;
+use Net::OpenSSH;
 
 use Data::Dumper;
 
@@ -141,6 +142,10 @@ sub run_rule_block {
 			my $arg = $self->substitute_expression($1 // '');
 			my $commands = $self->get_block_from_lines(\@block);
 			$self->run_sh_block($arg, $commands);
+		} elsif ($line =~ /\Assh(?:\s+(.*))?\Z/s) {
+			my $arg = $self->substitute_expression($1 // '');
+			my $commands = $self->get_block_from_lines(\@block);
+			$self->run_ssh_block($arg, $commands);
 		} elsif ($line =~ /\Asftp(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			my $commands = $self->get_block_from_lines(\@block);
@@ -158,7 +163,7 @@ sub run_sh_block {
 		my $ignore_error = $command =~ /\A-/;
 		$command =~ s/\A-//;
 		$command = $self->substitute_expression($command);
-		say "$command";
+		say "> $command";
 		if ($command =~ /\Acd\s+(.*)\Z/) {
 			unless (chdir $1) {
 				die "failed to cd into '$1'\n";
@@ -181,28 +186,72 @@ sub run_perl_block {
 	}
 }
 
+sub run_ssh_block {
+	my ($self, $args, $block) = @_;
+
+
+	my %ssh_args = ();
+	if ($args =~ /\A(?:([^:]+)(?::(.+))?\@)?([^\@:]+)(?::(\d+))?\Z/s) {
+		$ssh_args{user} = $1 if defined $1;
+		$ssh_args{password} = $2 if defined $2;
+		$ssh_args{host} = $3;
+		$ssh_args{port} = $4 if defined $4;
+	# } elsif ($args =~ /\A(.+)\@([^\@:]+(?::(\d+))?)\Z/s) {
+	# 	$ssh_args{user} = $1;
+	# 	$ssh_args{host} = $2;
+	# 	$ssh_args{port} = $3 if defined $3;
+	} else {
+		confess "invalid ssh argument: '$args'";
+	}
+
+	my $identification = $ssh_args{host};
+	$identification = "$identification:$ssh_args{port}" if exists $ssh_args{port};
+	$identification = "$ssh_args{user}\@$identification" if exists $ssh_args{user};
+
+	say "ssh login to $identification ...";
+	my $con = Net::OpenSSH->new(%ssh_args);
+
+	foreach my $command (@$block) {
+		my $ignore_error = $command =~ /\A-/;
+		$command =~ s/\A-//;
+		$command = $self->substitute_expression($command);
+		say "$identification> $command";
+		$con->system($command);
+		if (not $ignore_error and $? != 0) {
+			die "command failed with status code " . ($? >> 8) . "\n";
+		}
+	}
+}
+
 sub run_sftp_block {
 	my ($self, $args, $block) = @_;
 
 	my %sftp_args = (
 		autodie => 1,
 	);
-	if ($args =~ /\A(.+):(.+)\@([^\@]+)\Z/s) {
-		$sftp_args{user} = $1;
-		$sftp_args{password} = $2;
+	if ($args =~ /\A(?:([^:]+)(?::(.+))?\@)?([^\@:]+)(?::(\d+))?\Z/s) {
+		$sftp_args{user} = $1 if defined $1;
+		$sftp_args{password} = $2 if defined $2;
 		$sftp_args{host} = $3;
-	} elsif ($args =~ /\A(.+)\@([^\@]+)\Z/s) {
-		$sftp_args{user} = $1;
-		$sftp_args{host} = $2;
+		$sftp_args{port} = $4 if defined $4;
+	# } elsif ($args =~ /\A(.+)\@([^\@:]+(?::(\d+))?)\Z/s) {
+	# 	$sftp_args{user} = $1;
+	# 	$sftp_args{host} = $2;
+	# 	$sftp_args{port} = $3 if defined $3;
 	} else {
 		confess "invalid sftp argument: '$args'";
 	}
 
-	say "sftp login to $sftp_args{user}\@$sftp_args{host} ...";
+	my $identification = $sftp_args{host};
+	$identification = "$identification:$sftp_args{port}" if exists $sftp_args{port};
+	$identification = "$sftp_args{user}\@$identification" if exists $sftp_args{user};
+
+	say "sftp login to $identification ...";
 	my $con = Net::SFTP::Foreign->new(%sftp_args);
+
 	foreach my $command (@$block) {
 		$command = $self->substitute_expression($command);
-		say "$sftp_args{user}\@$sftp_args{host}> $command";
+		say "$identification> $command";
 
 		if ($command =~ /\Aget\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
 			my ($src, $dst) = ($1, $2);
