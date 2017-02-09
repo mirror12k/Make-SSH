@@ -64,6 +64,15 @@ sub get_block {
 	return \@block
 }
 
+sub get_block_from_lines {
+	my ($self, $lines) = @_;
+	my @block;
+	while (@$lines and $lines->[0] =~ /\A\t/) {
+		push @block, shift (@$lines) =~ s/\A\t//r;
+	}
+	return \@block
+}
+
 our $identifier_expression_regex = qr/[a-zA-Z_][a-zA-Z_0-9]*/;
 our $substitute_expression_regex = qr/\$\($identifier_expression_regex\)/;
 our $variable_identifier_expression_regex = qr/(?:[a-zA-Z_]|$substitute_expression_regex)(?:[a-zA-Z_0-9]|$substitute_expression_regex)*/;
@@ -80,12 +89,12 @@ sub process {
 			my ($var, $expression) = ($1, $2);
 			$var = $self->substitute_expression($var);
 			$expression = $self->substitute_expression($expression);
-			say "got var '$var' = $expression";
+			# say "got var '$var' = $expression";
 			$self->{vars}{$var} = $expression;
 		} elsif ($line =~ /\A($variable_identifier_expression_regex):\Z/) {
 			my $var = $1;
 			$var = $self->substitute_expression($var);
-			say "got block: '$var'";
+			# say "got block: '$var'";
 			$self->{rules}{$var} = $self->get_block;
 		} else {
 			confess "unknown makefile directive: '$line'";
@@ -116,6 +125,23 @@ sub run {
 		} elsif ($line =~ /\Adie(?:\s+(.*))?\Z/s) {
 			my $arg = $self->substitute_expression($1 // '');
 			die "died: $arg\n";
+		} elsif ($line =~ /\Ash(?:\s+(.*))?\Z/s) {
+			my $commands = $self->get_block_from_lines(\@block);
+			foreach my $command (@$commands) {
+				say "$command";
+				my $ignore_error = $command =~ /\A-/;
+				$command =~ s/\A-//;
+				if ($command =~ /\Acd\s+(.*)\Z/) {
+					unless (chdir $1) {
+						die "failed to cd into '$1'";
+					}
+				} else {
+					print `$command`;
+					if (not $ignore_error and $? != 0) {
+						die "command failed with status code " . ($? >> 8);
+					}
+				}
+			}
 		} else {
 			confess "unknown makefile rule command: '$line'";
 		}
