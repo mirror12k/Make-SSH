@@ -1,3 +1,4 @@
+#!/usr/bin/perl
 package MakefileParser;
 use strict;
 use warnings;
@@ -275,10 +276,17 @@ sub run_sftp_block {
 
 
 
-my $parser = MakefileParser->new;
-$parser->parse_file('test.make');
-# say Dumper $parser->{vars};
-# say Dumper $parser->{rules};
 
-my $rule = shift // 'all';
-$parser->run_rule($rule);
+sub main {
+	my ($rule) = @_;
+	$rule = $rule // 'all';
+
+	my $parser = MakefileParser->new;
+	$parser->parse_file('project.make');
+	# say Dumper $parser->{vars};
+	# say Dumper $parser->{rules};
+
+	$parser->run_rule($rule);
+}
+
+caller or main(@ARGV);
