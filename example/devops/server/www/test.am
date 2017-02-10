@@ -1,0 +1,1 @@
+<!doctype html><html><body><p><$ echo 'your ip is: ', join ':', @$request{'peer_ip', 'peer_port'} $></p></body></html>
