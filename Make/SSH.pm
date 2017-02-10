@@ -22,8 +22,8 @@ sub new {
 	$self->{vars} = {};
 	$self->{rules} = {};
 	$self->{ssh_connection_cache} = {};
-	# turn off connection caching for now because of a bug in Net::OpenSSH
-	$self->{cache_connections} = $args{cache_connections} // 0;
+	# caches an ssh connections to remote servers, allows avoiding renegotiation of passwords and authetication
+	$self->{cache_connections} = $args{cache_connections} // 1;
 
 	return $self
 }
