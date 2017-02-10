@@ -286,7 +286,6 @@ sub run_sftp_block {
 			$src =~ s/\\(.)/$1/gs;
 			$dst =~ s/\\(.)/$1/gs;
 			$con->rget($src, $dst);
-			$con->die_on_error("err");
 		} elsif ($command =~ /\Aput\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
 			my ($src, $dst) = ($1, $2);
 			$src =~ s/\\(.)/$1/gs;
