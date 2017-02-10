@@ -13,6 +13,28 @@ use Net::OpenSSH;
 
 
 
+=pod
+
+=head1 Make::SSH
+
+A build tool designed for both building and uploading/operating projects via ssh/sftp.
+
+Uses a subset of gnu makefile syntax to allow executing sh commands locally, ssh commands remotely, and sftp upload/download.
+The makefile is split up into rules which can be invoked individually from commandline.
+When an error occurs in any sh command, ssh command, or sftp operation, execution of the project.make file is immediately stopped.
+
+=head1 requirements
+
+This module requires the following perl modules: Carp, Net::OpenSSH, Net::SFTP::Foreign.
+It also requires some version of openssh client to be installed because Net::OpenSSH and Net::SFTP::Foreign piggyback on it to perform connections.
+Obviously your development server needs an ssh server (and an sftp server if you are going to use sftp).
+
+=head1 examples
+
+see the example makefiles under example/gcc/project.make, example/php_upload/project.make, and example/devops/project.make to learn how to use it.
+
+=cut
+
 
 
 sub new {
