@@ -21,6 +21,9 @@ sub new {
 
 	$self->{vars} = {};
 	$self->{rules} = {};
+	$self->{ssh_connection_cache} = {};
+	# turn off connection caching for now because of a bug in Net::OpenSSH
+	$self->{cache_connections} = $args{cache_connections} // 0;
 
 	return $self
 }
@@ -105,6 +108,8 @@ sub process {
 		}
 	}
 }
+
+
 
 sub run_rule {
 	my ($self, $rule) = @_;
@@ -205,8 +210,13 @@ sub run_ssh_block {
 	$identification = "$identification:$ssh_args{port}" if exists $ssh_args{port};
 	$identification = "$ssh_args{user}\@$identification" if exists $ssh_args{user};
 
-	say "ssh login to $identification ...";
-	my $con = Net::OpenSSH->new(%ssh_args);
+	my $con;
+	if ($self->{cache_connections}) {
+		$con = $self->connect_ssh(%ssh_args);
+	} else {
+		say "ssh login to $identification ...";
+		$con = Net::OpenSSH->new(%ssh_args);
+	}
 
 	foreach my $command (@$block) {
 		my $ignore_error = $command =~ /\A-/;
@@ -223,24 +233,27 @@ sub run_ssh_block {
 sub run_sftp_block {
 	my ($self, $args, $block) = @_;
 
-	my %sftp_args = (
-		autodie => 1,
-	);
+	my %ssh_args;
 	if ($args =~ /\A(?:([^:]+)(?::(.+))?\@)?([^\@:]+)(?::(\d+))?\Z/s) {
-		$sftp_args{user} = $1 if defined $1;
-		$sftp_args{password} = $2 if defined $2;
-		$sftp_args{host} = $3;
-		$sftp_args{port} = $4 if defined $4;
+		$ssh_args{user} = $1 if defined $1;
+		$ssh_args{password} = $2 if defined $2;
+		$ssh_args{host} = $3;
+		$ssh_args{port} = $4 if defined $4;
 	} else {
 		confess "invalid sftp argument: '$args'";
 	}
 
-	my $identification = $sftp_args{host};
-	$identification = "$identification:$sftp_args{port}" if exists $sftp_args{port};
-	$identification = "$sftp_args{user}\@$identification" if exists $sftp_args{user};
+	my $identification = $ssh_args{host};
+	$identification = "$identification:$ssh_args{port}" if exists $ssh_args{port};
+	$identification = "$ssh_args{user}\@$identification" if exists $ssh_args{user};
 
-	say "sftp login to $identification ...";
-	my $con = Net::SFTP::Foreign->new(%sftp_args);
+	my $con;
+	if ($self->{cache_connections}) {
+		$con = $self->connect_ssh(%ssh_args)->sftp(autodie => 1);
+	} else {
+		say "sftp login to $identification ...";
+		$con = Net::SFTP::Foreign->new(autodie => 1, %ssh_args);
+	}
 
 	foreach my $command (@$block) {
 		$command = $self->substitute_expression($command);
@@ -251,6 +264,7 @@ sub run_sftp_block {
 			$src =~ s/\\(.)/$1/gs;
 			$dst =~ s/\\(.)/$1/gs;
 			$con->rget($src, $dst);
+			$con->die_on_error("err");
 		} elsif ($command =~ /\Aput\s+((?:[^\s\\]|\\[\s\\])*)\s+=>\s+((?:[^\s\\]|\\[\s\\])*)\Z/) {
 			my ($src, $dst) = ($1, $2);
 			$src =~ s/\\(.)/$1/gs;
@@ -266,6 +280,21 @@ sub run_sftp_block {
 	}
 }
 
+sub connect_ssh {
+	my ($self, %ssh_args) = @_;
+
+	my $identification = $ssh_args{host};
+	$identification = "$identification:$ssh_args{port}" if exists $ssh_args{port};
+	$identification = "$ssh_args{user}\@$identification" if exists $ssh_args{user};
+
+	unless (exists $self->{ssh_connection_cache}{$identification}) {
+		say "ssh login to $identification ...";
+		my $con = Net::OpenSSH->new(%ssh_args);
+		$self->{ssh_connection_cache}{$identification} = $con;
+	}
+
+	return $self->{ssh_connection_cache}{$identification}
+}
 
 
 
