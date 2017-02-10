@@ -15,7 +15,7 @@ Obviously your development server needs an ssh server (and an sftp server if you
 
 ## details!
 
-launch with `./Make/SSH.pm <my rule>` to execute the project.make in the current directory. see the example files at [example/gcc/project.make](gcc example), [example/php_upload/project.make](php example), and [example/devops/project.make](devops example)
+launch with `./Make/SSH.pm <my rule>` to execute the project.make in the current directory. see the example files at [gcc example](example/gcc/project.make), [php example](example/php_upload/project.make), and [devops example](example/devops/project.make)
 
 ## makefiles!
 
